@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="de"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#f7f8f5">
+<meta name="description" content="Werkbank – das offene, lokale Whiteboard für Ideen und Projekte.">
+<title>Werkbank – Deine Ideen. Dein Board.</title>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="./src/style.css">
+</head><body>
+<header class="topbar">
+ <a class="brand" href="./" aria-label="Werkbank – Startseite"><span class="mark" aria-hidden="true">▦</span><span><strong>Werkbank</strong><small>Deine Ideen. Dein Board.</small></span></a>
+ <div class="top-actions">
+  <span class="status" id="saveStatus" role="status">Lokal gespeichert</span>
+  <button class="icon-btn" id="undo" title="Rückgängig (Strg+Z)" aria-label="Rückgängig">↶</button>
+  <button class="icon-btn" id="redo" title="Wiederholen (Strg+Umschalt+Z)" aria-label="Wiederholen">↷</button>
+  <button class="button subtle" id="importBtn">Importieren</button>
+  <button class="button subtle" id="exportBtn">↓ JSON</button>
+  <button class="button primary" id="newBoardBtn">+ Neues Board</button>
+ </div>
+</header>
+<main class="workspace">
+ <div class="heading"><div class="heading-main"><label for="boardSelect" class="eyebrow">AKTIVES BOARD</label><select id="boardSelect" aria-label="Board auswählen"></select><input id="boardTitle" maxlength="120" aria-label="Board-Titel" placeholder="Board-Titel"></div><div class="heading-side"><button class="button subtle" id="renameBoardBtn">Umbenennen</button><button class="button subtle danger" id="deleteBoardBtn">Board löschen</button><button class="button subtle" id="printBtn">Drucken / PDF</button></div></div>
+ <div class="help-line"><span class="dot"></span> Ohne Anmeldung · Nur auf diesem Gerät gespeichert <button id="helpBtn" class="text-button">Wie funktioniert das?</button></div>
+ <section class="board-scroll" aria-label="Kanban-Board"><div id="columns" class="columns"></div><button id="addColumn" class="add-column"><span class="plus-circle">+</span> Spalte hinzufügen</button></section>
+ <footer><span>Werkbank V0.1 · Open Source · Daten verbleiben in diesem Browser</span><span>Regelmäßig als JSON sichern · <a href="./README.md" target="_blank">Projektinfos</a></span></footer>
+</main>
+<input id="importFile" type="file" accept=".json,application/json" hidden>
+<dialog id="cardDialog" class="dialog"><form method="dialog" id="cardForm"><h2 id="cardDialogTitle">Karte bearbeiten</h2><label for="cardText">Inhalt</label><textarea id="cardText" maxlength="2000" rows="5" placeholder="Eine neue Idee …" required></textarea><div class="label-colors">Kartenfarbe</div><div id="colorChoices" class="color-choices" role="radiogroup" aria-label="Kartenfarbe"></div><div class="dialog-actions"><button value="cancel" class="button subtle" type="button" id="cancelCard">Abbrechen</button><button class="button primary" type="submit">Speichern</button></div></form></dialog>
+<dialog id="helpDialog" class="dialog"><h2>So funktioniert Werkbank</h2><p>Erstelle Karten über <strong>+ Karte</strong> und ziehe sie mit dem Griff in andere Spalten. Auf Touchgeräten halte den Griff und bewege den Finger. Über die Kartenmenüs kannst du Karten auch ohne Drag-and-drop verschieben.</p><p>Füge beliebig neue Spalten hinzu und benenne sie direkt um. Änderungen werden automatisch <strong>nur in diesem Browser</strong> gespeichert. Nutze <strong>↓ JSON</strong>, um ein Backup oder eine Datei für ein anderes Gerät zu erstellen.</p><p>GitHub Pages bietet keine Live-Synchronisierung. Andere Personen sehen dein Board nicht automatisch.</p><div class="dialog-actions"><button class="button primary" id="closeHelp">Verstanden</button></div></dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="./src/app.js"></script>
+</body></html>
