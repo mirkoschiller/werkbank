@@ -54,6 +54,92 @@ $('importBtn').addEventListener('click',()=>$('importFile').click());
 $('importFile').addEventListener('change',async e=>{const file=e.target.files[0];e.target.value='';if(!file)return;if(file.size>5_000_000)return announce('Datei zu groß (maximal 5 MB).');try{const b=validateBoard(JSON.parse(await file.text()));b.id=makeId();b.title+=' (Import)';mutate(()=>{boards.push(b);activeId=b.id});announce('Board importiert.')}catch(err){announce(err.message||'Import fehlgeschlagen.')}});
 $('printBtn').addEventListener('click',()=>window.print());$('helpBtn').addEventListener('click',()=>$('helpDialog').showModal());$('closeHelp').addEventListener('click',()=>$('helpDialog').close());
 $('undo').addEventListener('click',undo);$('redo').addEventListener('click',redo);document.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey)||['INPUT','TEXTAREA'].includes(document.activeElement.tagName))return;if(e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redo():undo()}else if(e.key.toLowerCase()==='y'){e.preventDefault();redo()}});
-function dropCard(cardId,x,y){const below=document.elementFromPoint(x,y);const column=below?.closest('[data-column]');if(!column)return;const columnId=column.dataset.column;const targetCard=below.closest('[data-card]');const before=targetCard?.dataset.card!==cardId?targetCard?.dataset.card:null;if(!active().columns.some(c=>c.cards.some(k=>k.id===cardId)))return;mutate(()=>moveCard(active(),cardId,columnId,before));}
-function installPointerDrag(handle,cardId){let start=null,ghost=null;handle.addEventListener('pointerdown',e=>{if(e.button!==0)return;start={x:e.clientX,y:e.clientY,id:e.pointerId};handle.setPointerCapture(e.pointerId)});handle.addEventListener('pointermove',e=>{if(!start||e.pointerId!==start.id)return;if(!ghost&&Math.hypot(e.clientX-start.x,e.clientY-start.y)<7)return;if(!ghost){const source=handle.closest('.card');ghost=source.cloneNode(true);ghost.classList.add('drag-ghost');ghost.style.width=`${source.offsetWidth}px`;document.body.append(ghost);source.classList.add('dragging')}ghost.style.left=`${e.clientX-ghost.offsetWidth/2}px`;ghost.style.top=`${e.clientY-25}px`;});const finish=(e)=>{if(!start||e.pointerId!==start.id)return;const moved=Boolean(ghost);ghost?.remove();handle.closest('.card')?.classList.remove('dragging');start=null;ghost=null;if(moved)dropCard(cardId,e.clientX,e.clientY)};handle.addEventListener('pointerup',finish);handle.addEventListener('pointercancel',()=>{ghost?.remove();start=null;ghost=null});}
+function dropCard(cardId,x,y){
+  const below=document.elementFromPoint(x,y);
+  const column=below?.closest('[data-column]');
+  if(!column)return;
+  const columnId=column.dataset.column;
+  const targetCard=below.closest('[data-card]');
+  const before=targetCard?.dataset.card!==cardId?targetCard?.dataset.card:null;
+  const board=active();
+  const source=board.columns.find(c=>c.cards.some(k=>k.id===cardId));
+  const destination=board.columns.find(c=>c.id===columnId);
+  if(!source||!destination)return;
+  const from=source.cards.findIndex(c=>c.id===cardId);
+  // A release in the same position is not an edit and should not create undo history.
+  if(source===destination && (before===cardId ||
+      (before===null && from===source.cards.length-1) ||
+      (before!==null && source.cards[from+1]?.id===before)))return;
+  mutate(()=>moveCard(board,cardId,columnId,before));
+}
+// Each pointer gesture owns its listeners and removes them on success or cancellation.
+// In particular, pointercancel and lostpointercapture must reset the source styling.
+let activeDragCleanup = null;
+function installPointerDrag(handle,cardId){
+  handle.addEventListener('pointerdown',e=>{
+    if(e.button!==0 || !e.isPrimary)return;
+    if(activeDragCleanup)activeDragCleanup();
+    const source=handle.closest('.card');
+    if(!source)return;
+    e.preventDefault();
+    const pointerId=e.pointerId;
+    const initialX=e.clientX,initialY=e.clientY;
+    let ghost=null,finished=false,highlight=null;
+    const removeHighlight=()=>{highlight?.classList.remove('drag-over');highlight=null;};
+    const cleanup=()=>{
+      if(finished)return;
+      finished=true;
+      removeHighlight();
+      ghost?.remove();
+      source.classList.remove('dragging');
+      window.removeEventListener('pointermove',move,true);
+      window.removeEventListener('pointerup',up,true);
+      window.removeEventListener('pointercancel',cancel,true);
+      window.removeEventListener('blur',cancel);
+      document.removeEventListener('visibilitychange',visibility);
+      document.removeEventListener('keydown',key,true);
+      handle.removeEventListener('lostpointercapture',cancel);
+      try{if(handle.hasPointerCapture(pointerId))handle.releasePointerCapture(pointerId);}catch{}
+      if(activeDragCleanup===cleanup)activeDragCleanup=null;
+    };
+    const move=ev=>{
+      if(ev.pointerId!==pointerId||finished)return;
+      if(!ghost&&Math.hypot(ev.clientX-initialX,ev.clientY-initialY)<7)return;
+      if(!ghost){
+        ghost=source.cloneNode(true);
+        ghost.classList.add('drag-ghost');
+        ghost.style.width=`${source.offsetWidth}px`;
+        document.body.append(ghost);
+        source.classList.add('dragging');
+      }
+      ghost.style.left=`${ev.clientX-ghost.offsetWidth/2}px`;
+      ghost.style.top=`${ev.clientY-25}px`;
+      const node=document.elementFromPoint(ev.clientX,ev.clientY);
+      const next=node?.closest('.column')||null;
+      if(next!==highlight){removeHighlight();highlight=next;highlight?.classList.add('drag-over');}
+    };
+    const up=ev=>{
+      if(ev.pointerId!==pointerId||finished)return;
+      const hasMoved=Boolean(ghost),x=ev.clientX,y=ev.clientY;
+      cleanup();
+      if(hasMoved)dropCard(cardId,x,y);
+    };
+    const cancel=ev=>{
+      if(ev?.pointerId!==undefined&&ev.pointerId!==pointerId)return;
+      cleanup();
+    };
+    const key=ev=>{if(ev.key==='Escape'){ev.preventDefault();cancel();}};
+    const visibility=()=>{if(document.hidden)cancel();};
+    activeDragCleanup=cleanup;
+    window.addEventListener('pointermove',move,true);
+    window.addEventListener('pointerup',up,true);
+    window.addEventListener('pointercancel',cancel,true);
+    window.addEventListener('blur',cancel);
+    document.addEventListener('visibilitychange',visibility);
+    document.addEventListener('keydown',key,true);
+    handle.addEventListener('lostpointercapture',cancel);
+    try{handle.setPointerCapture(pointerId);}catch{cancel();}
+  });
+}
+
 render();save();
