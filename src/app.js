@@ -1,3 +1,5 @@
+import { makeShareUrl, readShareHash } from './share.js';
+import { generateQRMatrix } from './qr.js';
 import { STORAGE_KEY, COLORS, freshBoard, validateBoard, moveCard, makeId } from './model.js';
 const $ = (id) => document.getElementById(id);
 let boards = loadBoards();
@@ -142,4 +144,61 @@ function installPointerDrag(handle,cardId){
   });
 }
 
-render();save();
+render();
+// Visitors to a shared snapshot do not create a local board just by opening the link.
+if (!location.hash.startsWith('#b=')) save();
+
+// A shared snapshot is read-only and never enters localStorage or the editable board list.
+function paintQRCode(canvas, url) {
+  const matrix=generateQRMatrix(url); const quiet=4; const count=matrix.length+quiet*2;
+  const scale=Math.max(1,Math.floor(600/count));
+  canvas.width=count*scale;canvas.height=count*scale;
+  const context=canvas.getContext('2d');
+  context.fillStyle='#ffffff';context.fillRect(0,0,canvas.width,canvas.height);
+  context.fillStyle='#162a21';
+  for(let r=0;r<matrix.length;r++)for(let c=0;c<matrix.length;c++)if(matrix[r][c])context.fillRect((c+quiet)*scale,(r+quiet)*scale,scale,scale);
+}
+$('shareBtn').addEventListener('click',async()=>{
+  const btn=$('shareBtn');btn.disabled=true;
+  try {
+    const url=await makeShareUrl(active(),location.href.split('#')[0]);
+    $('shareUrl').value=url;
+    paintQRCode($('shareQr'),url);
+    $('shareDialog').showModal();
+  } catch(err){announce(err.message||'Teilen nicht möglich.');}
+  finally{btn.disabled=false;}
+});
+$('copyShare').addEventListener('click',async()=>{
+  try {
+    if(navigator.clipboard?.writeText) await navigator.clipboard.writeText($('shareUrl').value);
+    else { $('shareUrl').focus();$('shareUrl').select();document.execCommand('copy'); }
+    announce('Freigabelink kopiert.');
+  }catch{ $('shareUrl').focus();$('shareUrl').select();announce('Bitte den markierten Link manuell kopieren.'); }
+});
+$('closeShare').addEventListener('click',()=>$('shareDialog').close());
+$('shareUrl').addEventListener('focus',e=>e.target.select());
+function renderViewer(board) {
+  $('editorWorkspace').hidden=true;
+  document.querySelector('.top-actions').hidden=true;
+  $('saveStatus').textContent='Geteilte Ansicht';
+  $('viewer').hidden=false;
+  $('viewerTitle').textContent=board.title;
+  const holder=$('viewerColumns');holder.replaceChildren();
+  for(const column of board.columns) {
+    const col=el('article','column');
+    const heading=el('div','column-head');
+    heading.append(el('strong','',column.title),el('span','count',String(column.cards.length)));
+    const cards=el('div','card-list');
+    for(const card of column.cards)cards.append(el('div',`card ${card.color}`,card.text));
+    col.append(heading,cards);holder.append(col);
+  }
+  document.title=`${board.title} – Werkbank (Ansicht)`;
+}
+async function initializeShareView() {
+  if(!location.hash.startsWith('#b='))return;
+  try {
+    const shared=await readShareHash(location.hash);
+    if(shared)renderViewer(shared);
+  }catch(err){announce(`Freigabelink konnte nicht geöffnet werden: ${err.message}`);}
+}
+initializeShareView();
